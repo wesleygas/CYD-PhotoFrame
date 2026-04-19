@@ -81,3 +81,27 @@
 - [x] **Image-error screen looped on dismissal** (regression introduced with the touch UX): dismissing called `loadImage(currentIndex)` which re-decoded the same bad file, and gating auto-advance on `!inInfoScreen` also disabled the auto-skip-past-bad-image behavior. Added an `errorScreenAdvancesIndex` flag, set by the three `decodeJpeg` failure paths and reset by every other `showStatusScreen` call. Both manual tap-dismissal and the slideshow timer skip to the next image when the flag is set; long-press info overlays still wait for a tap.
 - [x] **Tap left/right advanced two images at once** (touch-UX regression): `loop()` captured `now = millis()` *before* calling `handleTouchInput()`. The touch handler then ran `loadImage()` (a few hundred ms) and bumped `timer` to the new `millis()`. The auto-advance check that followed used the stale `now`, so `now - timer` underflowed `uint32_t` to a huge value, immediately tripping the timer-elapsed branch and advancing again. Pause hid the bug because the auto-advance branch was skipped entirely. Fixed by re-reading `now` after `handleTouchInput()`.
 - [x] **`/status` was slow and blocked the whole device** (multiple seconds, slideshow froze, other web requests queued). Cause: `sd.vol()->freeClusterCount()` walks the entire FAT (megabytes of SPI reads on a 32 GB card), and we were calling it on every request while holding `xSpiMutex` from the AsyncTCP task -- which serialises *all* async web work onto a single task, so every other route stalled too. Fix: cache `cachedCardBytes` and `cachedFreeBytes` in RAM, refreshed once at boot (before WiFi) and after every successful upload / delete via a new `refreshSdSpaceCache()` helper. `buildStatusRows` is now a pure in-memory render with zero SD I/O and zero mutex acquisitions -- `/status` returns in microseconds.
+  - Added a "Refresh SD info" button on `/status` that POSTs to `/refresh-sd-space`. The handler takes `xSpiMutex` (15 s timeout), runs `refreshSdSpaceCache()`, and 302s back to `/status`. Useful when the card was edited out-of-band (pulled out and changed on a PC) so the cached numbers don't have to wait for the next upload/delete to catch up.
+
+## Checkpoint 2026-04-19 (post-overhaul)
+
+Shipped this session:
+- Web UI extracted to SPIFFS (`data/web/*.html`, single shared `style.css`); `1-Slideshow.cpp` shrunk by ~600 lines.
+- README rewritten around the two-step OTA / `uploadfs` workflow.
+- `/status` performance fix (cache + manual refresh button).
+- Touch UX, night-dim, color fix, robust JPEG handling, server-side upload validation already in place from earlier in the day.
+
+Two commits on `main` (not pushed):
+- `274a3d9` -- Add web UI assets under data/web/ for SPIFFS-based templates
+- `99478a0` -- PhotoFrame v2.2 usability overhaul
+
+Next up (in roughly the order they'd add the most value):
+1. **Remote pause toggle** on the web UI (pairs naturally with the on-device tap-centre pause; backend state already exists, just needs a `/pause` POST + a button on `/`).
+2. **On-device wall clock + TZ** -- show current time on `/status` and `/display`, add a TZ field, feed it to `setenv("TZ", ...)` so night-mode hours are local.
+3. **Browser-side resizer** (`convert.html` on the SD root) -- low risk, big upload-friction reduction.
+4. **Server-side header-only JPEG validation** during upload (decode just the SOF marker, reject oversize before writing to SD).
+5. **Shuffle / random playback mode** -- small NVS toggle on `/display`, RNG over the file index.
+6. **Thumbnails in the delete page** -- bigger lift, depends on either pre-generated thumbs on SD or browser-side decode of the original `.jpg`.
+
+Housekeeping noticed but not done:
+- macOS `.DS_Store` files keep showing up in `git status`. Worth one tiny commit adding `.DS_Store` and `._*` to `.gitignore` next time we touch repo hygiene.
