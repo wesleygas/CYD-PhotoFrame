@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Display Settings</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Display Settings</h1>
+  <div class="container left" style="max-width:480px">
+    <form method="POST" action="/set-display">
+      <label for="dayBri">Day brightness (0-255)</label>
+      <div class="row">
+        <input type="range" min="10" max="255" id="dayBriR"
+               oninput="dayBri.value=this.value" value="%DAY_BR%">
+        <input type="number" min="0" max="255" id="dayBri" name="dayBri"
+               oninput="dayBriR.value=this.value" value="%DAY_BR%">
+      </div>
+
+      <label>
+        <input type="checkbox" name="nightOn" value="1" %NIGHT_CHK%>
+        Enable night mode (auto-dim)
+      </label>
+
+      <label for="nightBri">Night brightness (0-255)</label>
+      <div class="row">
+        <input type="range" min="0" max="255" id="nightBriR"
+               oninput="nightBri.value=this.value" value="%NIGHT_BR%">
+        <input type="number" min="0" max="255" id="nightBri" name="nightBri"
+               oninput="nightBriR.value=this.value" value="%NIGHT_BR%">
+      </div>
+
+      <label>Night window (24h, local time)</label>
+      <div class="row">
+        <span>From hour:</span>
+        <input type="number" min="0" max="23" name="nStart" value="%NIGHT_START%">
+        <span>To hour:</span>
+        <input type="number" min="0" max="23" name="nEnd" value="%NIGHT_END%">
+      </div>
+      <p class="hint">Time is via NTP in UTC. Adjust hours so the window matches your local night.</p>
+
+      <div style="text-align:center;margin-top:20px;">
+        <input type="submit" value="Save" class="button">
+        <a href="/" class="button secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

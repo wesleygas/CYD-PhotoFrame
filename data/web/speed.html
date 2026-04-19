@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Set Slideshow Speed</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Set Slideshow Speed</h1>
+  <div class="container">
+    <form action="/set-speed" method="POST">
+      <label for="speed">Enter slideshow speed (in seconds):</label>
+      <br>
+      <input type="number" id="speed" name="speed" min="1" value="%X%" class="input-field">
+      <br>
+      <input type="submit" value="Set Speed" class="button">
+    </form>
+    <a href="/" class="button secondary">Go Back to Main Page</a>
+  </div>
+</body>
+</html>

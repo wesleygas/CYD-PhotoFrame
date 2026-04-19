@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Upload Image</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Upload a New Image</h1>
+  <div class="container">
+    <form method="POST" action="/upload_file" enctype="multipart/form-data">
+      <input type="file" name="file" id="file" class="input-file" accept=".jpg,.jpeg,image/jpeg">
+      <br>
+      <input type="submit" value="Upload" class="submit-button">
+    </form>
+    <p class="hint">Only .jpg / .jpeg files are accepted. 320x240 gives the cleanest result.</p>
+    <a href="/" class="button secondary">Go Back to Main Page</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Slideshow</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="sidebar">
+    <button onclick="location.href='/'">Go Back to Main Page</button>
+  </div>
+  <div id="main-content">
+    <img id="slideshow" src="/current_image">
+  </div>
+
+  <script>
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
+
+    window.addEventListener('load', onLoad);
+    window.addEventListener('beforeunload', function() {
+      if (websocket) websocket.close();
+    });
+
+    function onLoad() {
+      initWebSocket();
+      updateImage();
+    }
+
+    function initWebSocket() {
+      console.log('Trying to open a WebSocket connection...');
+      websocket = new WebSocket(gateway);
+      websocket.onopen  = function() { console.log('Connection opened'); };
+      websocket.onclose = function() {
+        console.log('Connection closed');
+        setTimeout(initWebSocket, 2000);
+      };
+      websocket.onmessage = function(event) {
+        if (event.data === 'update') updateImage();
+      };
+    }
+
+    function updateImage() {
+      var img = document.getElementById('slideshow');
+      img.src = '/current_image?nocache=' + new Date().getTime();
+    }
+  </script>
+</body>
+</html>

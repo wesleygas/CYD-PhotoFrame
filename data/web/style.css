@@ -1,0 +1,177 @@
+/* PhotoFrame shared web UI styles. Served as /style.css from SPIFFS. */
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f0f0;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  background-color: #333;
+  color: white;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  padding: 20px;
+}
+
+.container.left {
+  display: inline-block;
+  text-align: left;
+  max-width: 600px;
+}
+
+.button,
+.submit-button {
+  display: inline-block;
+  padding: 15px 25px;
+  font-size: 16px;
+  margin: 10px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  outline: none;
+  color: #fff;
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 5px #999;
+}
+
+.button:hover,
+.submit-button:hover {
+  background-color: #3e8e41;
+}
+
+.button:active,
+.submit-button:active {
+  background-color: #3e8e41;
+  box-shadow: 0 3px #666;
+  transform: translateY(2px);
+}
+
+.button.secondary { background-color: #777; }
+.button.danger    { background-color: #c0392b; }
+
+/* Forms */
+.input-field {
+  padding: 10px;
+  font-size: 16px;
+  width: 200px;
+  margin-bottom: 20px;
+}
+
+.input-file {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+input[type=number],
+input[type=range] {
+  width: 100%;
+  padding: 8px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+label {
+  display: block;
+  margin-top: 14px;
+  font-weight: bold;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.row > * { flex: 1; }
+
+.hint { color: #555; font-size: 13px; }
+
+/* Warnings */
+.warning {
+  background-color: #ffe9e9;
+  border: 2px solid #c0392b;
+  color: #7b1d1d;
+  padding: 12px 16px;
+  margin: 12px auto 20px auto;
+  max-width: 600px;
+  text-align: left;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+/* Delete page */
+.filename.image { color: #1d6e33; }
+.filename.other { color: #555; font-style: italic; }
+
+input[type=checkbox] {
+  margin: 5px;
+  transform: scale(1.5);
+}
+
+/* Status table */
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 8px 12px; border-bottom: 1px solid #ddd; text-align: left; }
+th { background: #eee; width: 40%; }
+
+/* About page list */
+ul {
+  text-align: left;
+  display: inline-block;
+  margin: 0;
+  padding: 0 20px;
+}
+
+/* Slideshow page (sidebar layout) */
+#sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 200px;
+  height: 100%;
+  background-color: #333;
+  color: white;
+  padding-top: 20px;
+  box-sizing: border-box;
+}
+
+#sidebar button {
+  display: block;
+  width: 160px;
+  margin: 20px auto;
+  padding: 15px;
+  font-size: 16px;
+  cursor: pointer;
+  text-align: center;
+  outline: none;
+  color: #fff;
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 15px;
+}
+
+#sidebar button:hover { background-color: #3e8e41; }
+
+#sidebar button:active {
+  background-color: #3e8e41;
+  box-shadow: 0 3px #666;
+  transform: translateY(2px);
+}
+
+#main-content {
+  margin-left: 200px;
+  padding: 0;
+  text-align: center;
+}
+
+#main-content img {
+  max-width: 100%;
+  height: auto;
+}

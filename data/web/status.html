@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PhotoFrame Status</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>PhotoFrame Status</h1>
+  <div class="container left" style="max-width:520px">
+    <table>%STATUS_ROWS%</table>
+    <p class="hint" style="text-align:center">
+      SD total / free are cached and refreshed after every upload or delete.
+      Click below to force a recompute (takes a few seconds while the FAT is walked).
+    </p>
+    <div style="text-align:center">
+      <a href="/" class="button">Back</a>
+      <form method="POST" action="/refresh-sd-space" style="display:inline-block;margin:0">
+        <input type="submit" value="Refresh SD info" class="button secondary">
+      </form>
+    </div>
+  </div>
+</body>
+</html>

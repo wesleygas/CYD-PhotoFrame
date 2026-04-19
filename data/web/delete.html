@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Delete Files</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Delete Files</h1>
+  <div class="warning">
+    WARNING: This page lists every file on the SD card root, not just images.
+    Anything you tick will be permanently deleted. Double-check before submitting.
+  </div>
+  <div class="container left">
+    <form method="POST" action="/delete_files"
+          onsubmit="return confirm('Permanently delete the selected files?');">
+%FILE_LIST%
+      <br>
+      <input type="submit" value="Delete Selected Files" class="submit-button">
+    </form>
+    <a href="/" class="button secondary">Go Back to Main Page</a>
+  </div>
+</body>
+</html>
