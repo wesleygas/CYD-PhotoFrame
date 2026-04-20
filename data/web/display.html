@@ -36,7 +36,16 @@
         <span>To hour:</span>
         <input type="number" min="0" max="23" name="nEnd" value="%NIGHT_END%">
       </div>
-      <p class="hint">Time is via NTP in UTC. Adjust hours so the window matches your local night.</p>
+
+      <label for="tz">UTC Offset (hours)</label>
+      <input type="number" min="-12" max="14" step="1" id="tz" name="tz"
+             value="%TZ_OFFSET%" style="width:120px;padding:8px;font-size:16px">
+      <p class="hint">
+        Your timezone offset from UTC. Examples: -3 Buenos Aires &nbsp;|&nbsp;
+        0 London &nbsp;|&nbsp; 1 Paris &nbsp;|&nbsp; 5 Karachi &nbsp;|&nbsp;
+        8 Beijing &nbsp;|&nbsp; 9 Tokyo &nbsp;|&nbsp; -5 New York &nbsp;|&nbsp; -8 LA<br>
+        Night-mode hours follow this offset. Check Status to confirm the clock is correct.
+      </p>
 
       <div style="text-align:center;margin-top:20px;">
         <input type="submit" value="Save" class="button">

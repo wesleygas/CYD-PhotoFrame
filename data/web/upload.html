@@ -7,13 +7,74 @@
 <body>
   <h1>Upload a New Image</h1>
   <div class="container">
-    <form method="POST" action="/upload_file" enctype="multipart/form-data">
-      <input type="file" name="file" id="file" class="input-file" accept=".jpg,.jpeg,image/jpeg">
+    <canvas id="preview" width="320" height="240" style="max-width:100%;border:1px solid #ccc;margin-bottom:8px;display:none"></canvas>
+    <p class="hint" id="resize-info"></p>
+    <form id="upload-form" method="POST" action="/upload_file" enctype="multipart/form-data">
+      <input type="file" name="file" id="file" class="input-file" accept="image/*">
       <br>
-      <input type="submit" value="Upload" class="submit-button">
+      <input type="submit" value="Upload" class="submit-button" id="submit-btn" disabled>
     </form>
-    <p class="hint">Only .jpg / .jpeg files are accepted. 320x240 gives the cleanest result.</p>
+    <p class="hint">Any image format is accepted — it will be resized to 320&times;240 JPEG in your browser before upload.</p>
     <a href="/" class="button secondary">Go Back to Main Page</a>
   </div>
+  <script>
+    var input  = document.getElementById('file');
+    var canvas = document.getElementById('preview');
+    var ctx    = canvas.getContext('2d');
+    var info   = document.getElementById('resize-info');
+    var btn    = document.getElementById('submit-btn');
+    var form   = document.getElementById('upload-form');
+    var resizedBlob = null;
+
+    input.addEventListener('change', function() {
+      var file = this.files[0];
+      if (!file) { btn.disabled = true; return; }
+      btn.disabled = true;
+      btn.value = 'Processing...';
+      resizedBlob = null;
+      var img = new Image();
+      img.onload = function() {
+        var scale = Math.min(320 / img.width, 240 / img.height);
+        var w = Math.round(img.width  * scale);
+        var h = Math.round(img.height * scale);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 320, 240);
+        ctx.drawImage(img, Math.round((320 - w) / 2), Math.round((240 - h) / 2), w, h);
+        URL.revokeObjectURL(img.src);
+        canvas.style.display = 'block';
+        info.textContent = 'Original: ' + img.width + '\xd7' + img.height +
+                           ' \u2192 letterboxed to 320\xd7240';
+        canvas.toBlob(function(blob) {
+          resizedBlob = blob;
+          btn.disabled = false;
+          btn.value = 'Upload';
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = function() {
+        info.textContent = 'Could not load image — try a different file.';
+        btn.disabled = true;
+        btn.value = 'Upload';
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    form.addEventListener('submit', function(e) {
+      if (!resizedBlob) return;
+      e.preventDefault();
+      btn.disabled = true;
+      btn.value = 'Uploading...';
+      var origName = input.files[0].name.replace(/\.[^.]+$/, '.jpg');
+      var fd = new FormData();
+      fd.append('file', resizedBlob, origName);
+      fetch('/upload_file', { method: 'POST', body: fd })
+        .then(function(r) { return r.text(); })
+        .then(function(html) { document.open(); document.write(html); document.close(); })
+        .catch(function() {
+          btn.disabled = false;
+          btn.value = 'Upload';
+          info.textContent = 'Upload failed — check connection and try again.';
+        });
+    });
+  </script>
 </body>
 </html>

@@ -74,7 +74,9 @@ volatile bool buttonPressed = false;
 
 bool sdMounted = false;
 bool slideshowActive = true;
-bool slideshowPaused = false;          // Toggled by center-tap
+bool slideshowPaused = false;          // Toggled by center-tap or /toggle-pause
+volatile bool pendingPauseBadge  = false;  // set by web handler, drawn by main loop
+volatile bool pendingImageReload = false;  // set by web handler, reloads image on main loop
 
 // SD card space cache. freeClusterCount() walks the entire FAT (megabytes
 // of SPI reads on a 32 GB card -> multi-second blocking call). We keep a
@@ -110,6 +112,9 @@ void loadSettings();
 void saveSettings();
 void initBacklight();
 void initTimeNTP();
+String makePosixTz(int offset);
+String tzLabel(int offset);
+void buildShuffleOrder();
 void mapTouch(const TouchPoint& p, int& outX, int& outY);
 void handleTouchInput();
 void drawPauseBadge();
@@ -125,6 +130,9 @@ uint8_t nightBrightness = 20;     // 0-255
 uint8_t nightStartHour = 22;      // 0-23
 uint8_t nightEndHour = 7;         // 0-23
 bool nightModeEnabled = true;
+int  tzOffsetHours = 0;           // UTC offset (-12..+14), persisted in NVS
+bool shuffleMode = false;         // Shuffle playback order, persisted in NVS
+uint16_t* shuffleOrder = nullptr; // Heap-allocated permutation array (rebuilt on toggle/scan)
 const char* PREFS_NS = "frame";
 
 // Backlight PWM
@@ -254,8 +262,14 @@ uint16_t scanImages() {
 }
 
 // Function to load and display an image
-void loadImage(uint16_t targetIndex) {
+void loadImage(uint16_t logicalIndex) {
   if (!slideshowActive) return;
+
+  // In shuffle mode, translate the logical sequential index into the
+  // shuffled physical index so every image is seen once before repeating.
+  uint16_t targetIndex = (shuffleMode && shuffleOrder && fileCount > 0)
+                           ? shuffleOrder[logicalIndex % fileCount]
+                           : logicalIndex;
 
   if (targetIndex >= fileCount) targetIndex = 0;
   sdRoot.rewind();
@@ -524,12 +538,17 @@ static String uploadRejectReason;
 // capture additional state and forward unknown vars to webProcessor() for
 // the common substitutions.
 String webProcessor(const String& var) {
-  if (var == "X")           return String(X);
-  if (var == "DAY_BR")      return String(dayBrightness);
-  if (var == "NIGHT_BR")    return String(nightBrightness);
-  if (var == "NIGHT_START") return String(nightStartHour);
-  if (var == "NIGHT_END")   return String(nightEndHour);
-  if (var == "NIGHT_CHK")   return nightModeEnabled ? String("checked") : String("");
+  if (var == "X")               return String(X);
+  if (var == "DAY_BR")          return String(dayBrightness);
+  if (var == "NIGHT_BR")        return String(nightBrightness);
+  if (var == "NIGHT_START")     return String(nightStartHour);
+  if (var == "NIGHT_END")       return String(nightEndHour);
+  if (var == "NIGHT_CHK")       return nightModeEnabled ? String("checked") : String("");
+  if (var == "PAUSE_LABEL")     return slideshowPaused ? String("Resume Slideshow") : String("Pause Slideshow");
+  if (var == "PAUSE_BTN_CLASS") return slideshowPaused ? String("button secondary") : String("button");
+  if (var == "TZ_OFFSET")       return String(tzOffsetHours);
+  if (var == "SHUFFLE_LABEL")     return shuffleMode ? String("Shuffle: On") : String("Shuffle: Off");
+  if (var == "SHUFFLE_BTN_CLASS") return shuffleMode ? String("button") : String("button secondary");
   return String();
 }
 
@@ -571,10 +590,14 @@ String buildDeleteFileList() {
     }
     bool isImg = isImageFile(name);
     String cls = isImg ? "image" : "other";
+    html += "<div class='file-row'>";
     html += "<input type='checkbox' name='file' value='" + String(name) + "'>";
+    if (isImg) {
+      html += "<img class='thumb' src='/sd-image?name=" + String(name) + "' loading='lazy'>";
+    }
     html += "<span class='filename " + cls + "'>" + String(name);
-    if (!isImg) html += "  (not an image)";
-    html += "</span><br>";
+    if (!isImg) html += " (not an image)";
+    html += "</span></div>";
     fileFound = true;
     entry.close();
   }
@@ -602,6 +625,13 @@ String buildStatusRows() {
   };
   row("Firmware build",  String(__DATE__) + " " + String(__TIME__));
   row("Uptime",          String(uptimeStr));
+  char timeBuf[32] = "(NTP not yet synced)";
+  struct tm tm_now;
+  if (getLocalTime(&tm_now, 0)) {
+    strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tm_now);
+  }
+  row("Local time",      String(timeBuf));
+  row("Timezone",        tzLabel(tzOffsetHours));
   row("Free heap",       String(esp_get_free_heap_size()) + " bytes");
   row("WiFi SSID",       currentSsid.length() ? currentSsid : String("(offline)"));
   row("WiFi RSSI",       WiFi.status() == WL_CONNECTED
@@ -665,7 +695,7 @@ void handleFileUpload(AsyncWebServerRequest *request) {
   // scanImages walks the SD so we still serialize against any other web ops)
   if (xSemaphoreTake(xSpiMutex, pdMS_TO_TICKS(2000)) == pdTRUE) {
     fileCount = scanImages();
-    refreshSdSpaceCache();
+    if (shuffleMode) buildShuffleOrder();
     xSemaphoreGive(xSpiMutex);
   }
   currentIndex = 0;
@@ -699,6 +729,9 @@ void setupWebServer() {
   });
   server.on("/about", HTTP_GET, [](AsyncWebServerRequest *r) {
     sendHtml(r, "/web/about.html");
+  });
+  server.on("/convert", HTTP_GET, [](AsyncWebServerRequest *r) {
+    sendHtml(r, "/web/convert.html");
   });
   server.on("/slideshow", HTTP_GET, [](AsyncWebServerRequest *r) {
     sendHtml(r, "/web/slideshow.html");
@@ -820,7 +853,7 @@ void setupWebServer() {
       }
     }
     fileCount = scanImages();
-    refreshSdSpaceCache();
+    if (shuffleMode) buildShuffleOrder();
     xSemaphoreGive(xSpiMutex);
     if (currentIndex >= fileCount) currentIndex = 0;
 
@@ -857,6 +890,22 @@ void setupWebServer() {
     r->redirect("/status");
   });
 
+  server.on("/toggle-pause", HTTP_POST, [](AsyncWebServerRequest *r) {
+    slideshowPaused = !slideshowPaused;
+    Serial.printf("[web] slideshow %s\n", slideshowPaused ? "paused" : "resumed");
+    if (slideshowPaused) pendingPauseBadge  = true;
+    else                 pendingImageReload = true;
+    r->redirect("/");
+  });
+
+  server.on("/toggle-shuffle", HTTP_POST, [](AsyncWebServerRequest *r) {
+    shuffleMode = !shuffleMode;
+    Serial.printf("[web] shuffle %s\n", shuffleMode ? "on" : "off");
+    if (shuffleMode) buildShuffleOrder();
+    saveSettings();
+    r->redirect("/");
+  });
+
   // Display settings (brightness + night-mode window).
   server.on("/display", HTTP_GET, [](AsyncWebServerRequest *r) {
     sendHtml(r, "/web/display.html");
@@ -873,6 +922,12 @@ void setupWebServer() {
     nightStartHour   = (uint8_t)constrain(getInt("nStart",   nightStartHour),  0, 23);
     nightEndHour     = (uint8_t)constrain(getInt("nEnd",     nightEndHour),    0, 23);
     nightModeEnabled = r->hasParam("nightOn", true);
+    if (r->hasParam("tz", true)) {
+      int newOffset = constrain((int)r->getParam("tz", true)->value().toInt(), -12, 14);
+      tzOffsetHours = newOffset;
+      setenv("TZ", makePosixTz(tzOffsetHours).c_str(), 1);
+      tzset();
+    }
     saveSettings();
     applyBacklight();
     r->redirect("/display");
@@ -949,6 +1004,39 @@ server.on("/current_image", HTTP_GET, [](AsyncWebServerRequest *request) {
   request->send(response);
 });
 
+  // Serve any image from the SD card by name — used for thumbnails on /delete.
+  server.on("/sd-image", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (!r->hasParam("name")) { r->send(400, "text/plain", "missing name"); return; }
+    String name = r->getParam("name")->value();
+    if (!isImageFile(name.c_str()) || name.indexOf('/') >= 0 || name.indexOf("..") >= 0) {
+      r->send(400, "text/plain", "bad filename"); return;
+    }
+    String path = "/" + name;
+    {
+      if (xSemaphoreTake(xSpiMutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        r->send(503, "text/plain", "busy"); return;
+      }
+      SdBaseFile f;
+      bool ok = f.open(path.c_str(), O_RDONLY);
+      if (ok) f.close();
+      xSemaphoreGive(xSpiMutex);
+      if (!ok) { r->send(404, "text/plain", "not found"); return; }
+    }
+    AsyncWebServerResponse *resp = r->beginChunkedResponse("image/jpeg",
+      [path](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+        if (xSemaphoreTake(xSpiMutex, pdMS_TO_TICKS(2000)) != pdTRUE) return 0;
+        SdBaseFile file;
+        if (!file.open(path.c_str(), O_RDONLY)) { xSemaphoreGive(xSpiMutex); return 0; }
+        if (index > 0) file.seekSet(index);
+        size_t got = file.read(buffer, maxLen);
+        file.close();
+        xSemaphoreGive(xSpiMutex);
+        return got;
+      });
+    resp->addHeader("Cache-Control", "max-age=3600");
+    r->send(resp);
+  });
+
 
   // (WebSocket is registered in setup() before setupWebServer is called.)
 
@@ -974,9 +1062,12 @@ void loadSettings() {
   nightStartHour = prefs.getUChar("nStart", 22);
   nightEndHour = prefs.getUChar("nEnd", 7);
   nightModeEnabled = prefs.getBool("nightOn", true);
+  tzOffsetHours = constrain(prefs.getInt("tzOffset", 0), -12, 14);
+  shuffleMode = prefs.getBool("shuffle", false);
   prefs.end();
-  Serial.printf("Loaded settings: X=%d dayBri=%u nightBri=%u night=%u-%u on=%d\n",
-                X, dayBrightness, nightBrightness, nightStartHour, nightEndHour, nightModeEnabled);
+  Serial.printf("Loaded settings: X=%d dayBri=%u nightBri=%u night=%u-%u on=%d tz=%+d shuffle=%d\n",
+                X, dayBrightness, nightBrightness, nightStartHour, nightEndHour, nightModeEnabled,
+                tzOffsetHours, shuffleMode);
 }
 
 void saveSettings() {
@@ -987,6 +1078,8 @@ void saveSettings() {
   prefs.putUChar("nStart", nightStartHour);
   prefs.putUChar("nEnd", nightEndHour);
   prefs.putBool("nightOn", nightModeEnabled);
+  prefs.putInt("tzOffset", tzOffsetHours);
+  prefs.putBool("shuffle", shuffleMode);
   prefs.end();
 }
 
@@ -1019,9 +1112,44 @@ void applyBacklight() {
   ledcWrite(BACKLIGHT_LEDC_CHANNEL, target);
 }
 
-// Configure NTP (UTC by default; users can adjust at compile time if desired)
+// Build POSIX TZ string from a standard UTC offset (e.g. -3 → "<UTC-3>3")
+// POSIX offsets are WEST of UTC — the opposite sign of the conventional notation.
+String makePosixTz(int offset) {
+  if (offset == 0) return "UTC0";
+  String s = "<UTC";
+  if (offset > 0) s += "+";
+  s += String(offset) + ">" + String(-offset);
+  return s;
+}
+
+// Human-readable label for the UTC offset (e.g. -3 → "UTC-3")
+String tzLabel(int offset) {
+  if (offset == 0) return "UTC";
+  String s = "UTC";
+  if (offset > 0) s += "+";
+  s += String(offset);
+  return s;
+}
+
+// Fisher-Yates shuffle of indices 0..fileCount-1. Called after scanImages()
+// when shuffle mode is on, and again each time the index wraps to 0.
+void buildShuffleOrder() {
+  free(shuffleOrder);
+  shuffleOrder = nullptr;
+  if (fileCount == 0) return;
+  shuffleOrder = (uint16_t*)malloc(fileCount * sizeof(uint16_t));
+  if (!shuffleOrder) return;
+  for (uint16_t i = 0; i < fileCount; i++) shuffleOrder[i] = i;
+  for (uint16_t i = fileCount - 1; i > 0; i--) {
+    uint16_t j = (uint16_t)(esp_random() % (uint32_t)(i + 1));
+    uint16_t tmp = shuffleOrder[i]; shuffleOrder[i] = shuffleOrder[j]; shuffleOrder[j] = tmp;
+  }
+  Serial.printf("[shuffle] new order built for %u files\n", fileCount);
+}
+
+// Configure NTP and apply the persisted POSIX TZ string so local time is correct
 void initTimeNTP() {
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  configTzTime(makePosixTz(tzOffsetHours).c_str(), "pool.ntp.org", "time.nist.gov");
 }
 
 // Map raw touch into display pixel coords for tft.setRotation(3). Both axes
@@ -1374,6 +1502,7 @@ void setup() {
     } else {
       fileCount = scanImages();
       Serial.printf("Found %d images.\n", fileCount);
+      if (shuffleMode) buildShuffleOrder();
       // Prime the SD-space cache up front so /status renders instantly later.
       // freeClusterCount() can take several seconds on a big card; doing it
       // here (before the web server is running) keeps it off the critical path.
@@ -1414,6 +1543,15 @@ void loop() {
   // updated `timer` (uint32_t underflow would make the auto-advance check
   // pass immediately, double-advancing the slideshow on every tap).
   handleTouchInput();
+  if (pendingPauseBadge) {
+    pendingPauseBadge = false;
+    drawPauseBadge();
+  }
+  if (pendingImageReload) {
+    pendingImageReload = false;
+    loadImage(currentIndex);
+    timer = millis();
+  }
   uint32_t now = millis();
 
   // Slideshow auto-advance is suppressed while paused or while a non-error
@@ -1424,10 +1562,9 @@ void loop() {
                           (inInfoScreen && !errorScreenAdvancesIndex);
   if (fileCount > 0 && !blockAutoAdvance) {
     if ((now - timer > (uint32_t)X * 1000) || buttonPressed) {
-      currentIndex = (currentIndex + 1) % fileCount;
-      // loadImage() draws the next image and (on success) leaves
-      // inInfoScreen=false / errorScreenAdvancesIndex=false. On failure it
-      // sets up the next error screen; the loop will keep advancing.
+      uint16_t nextIdx = (currentIndex + 1) % fileCount;
+      if (shuffleMode && nextIdx == 0) buildShuffleOrder();
+      currentIndex = nextIdx;
       loadImage(currentIndex);
       timer = millis();
       buttonPressed = false;

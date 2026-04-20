@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PhotoFrame Image Converter</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f0f0; text-align: center; margin: 0; padding: 0; }
+    h1 { background: #333; color: #fff; padding: 20px; margin: 0; }
+    .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+    .drop-zone {
+      border: 3px dashed #aaa; border-radius: 12px; padding: 40px 20px;
+      cursor: pointer; color: #555; font-size: 16px; margin: 16px 0;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone.over { border-color: #4CAF50; background: #e8f5e9; }
+    canvas { border: 1px solid #ccc; border-radius: 4px; max-width: 100%; display: none; margin: 12px auto; }
+    .hint { color: #555; font-size: 13px; margin: 8px 0; }
+    .button {
+      display: inline-block; padding: 15px 25px; font-size: 16px; margin: 8px;
+      cursor: pointer; color: #fff; background: #4CAF50; border: none;
+      border-radius: 15px; box-shadow: 0 5px #999; text-decoration: none;
+    }
+    .button:hover { background: #3e8e41; }
+    .button:active { background: #3e8e41; box-shadow: 0 3px #666; transform: translateY(2px); }
+    .button:disabled { background: #aaa; box-shadow: none; cursor: default; transform: none; }
+    .button.secondary { background: #777; }
+    #info { min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <h1>PhotoFrame Image Converter</h1>
+  <div class="container">
+    <p>Resize any image to 320&times;240 JPEG for the PhotoFrame SD card.</p>
+
+    <div class="drop-zone" id="drop-zone">
+      Drop an image here, or click to pick a file
+      <input type="file" id="file" accept="image/*" style="display:none">
+    </div>
+
+    <canvas id="preview" width="320" height="240"></canvas>
+    <p class="hint" id="info"></p>
+
+    <button class="button" id="dl-btn" disabled>Download 320&times;240 JPEG</button>
+    <a href="/" class="button secondary" id="back-link">Back to PhotoFrame</a>
+  </div>
+
+  <script>
+    var dropZone = document.getElementById('drop-zone');
+    var fileInput = document.getElementById('file');
+    var canvas    = document.getElementById('preview');
+    var ctx       = canvas.getContext('2d');
+    var info      = document.getElementById('info');
+    var dlBtn     = document.getElementById('dl-btn');
+    var lastName  = 'photoframe.jpg';
+
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('over'); });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault(); dropZone.classList.remove('over');
+      if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', function() {
+      if (this.files[0]) processFile(this.files[0]);
+    });
+
+    function processFile(file) {
+      lastName = file.name.replace(/\.[^.]+$/, '.jpg');
+      info.textContent = 'Loading...';
+      dlBtn.disabled = true;
+      canvas.style.display = 'none';
+      var img = new Image();
+      img.onload = function() {
+        var scale = Math.min(320 / img.width, 240 / img.height);
+        var w = Math.round(img.width  * scale);
+        var h = Math.round(img.height * scale);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 320, 240);
+        ctx.drawImage(img, Math.round((320 - w) / 2), Math.round((240 - h) / 2), w, h);
+        URL.revokeObjectURL(img.src);
+        canvas.style.display = 'block';
+        info.textContent = 'Original: ' + img.width + '\xd7' + img.height +
+                           ' \u2192 letterboxed to 320\xd7240. Ready to download.';
+        dlBtn.disabled = false;
+      };
+      img.onerror = function() { info.textContent = 'Could not load image — try a different file.'; };
+      img.src = URL.createObjectURL(file);
+    }
+
+    dlBtn.addEventListener('click', function() {
+      canvas.toBlob(function(blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = lastName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }, 'image/jpeg', 0.85);
+    });
+
+    // Hide the "Back" link when opened as a local file (no server)
+    if (location.protocol === 'file:') {
+      document.getElementById('back-link').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

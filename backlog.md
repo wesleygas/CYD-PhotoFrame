@@ -31,9 +31,8 @@
 
 ## Web interface
 
-- [ ] Auto-convert / resize images on upload via website (target `.jpg` 320x240)
+- [x] Auto-convert / resize images on upload via website (target `.jpg` 320x240)
 - [x] Server-side upload validation: rejects anything whose name is not `.jpg`/`.jpeg` before touching the SD, returns a 400 with the reason
-- [ ] Server-side size / resolution validation on upload (decode header up-front and reject oversize)
 - [x] `/status` page: SD free space, image count, WiFi signal, IP, firmware build, uptime, current image, settings
 - [x] Delete page: keep listing all files, prominent red warning + JS confirm dialog; non-image files are visually marked
 
@@ -43,7 +42,7 @@
 - [x] Tap centre -> pause / resume (auto-advance is gated on `slideshowPaused` and a `PAUSE` badge is drawn while paused)
 - [x] Long-press -> show IP / QR overlay (any tap dismisses)
 - [x] `/status` reports the current playback state (`running` / `paused` / `info screen`)
-- [ ] Surface the same pause toggle on the web UI so the frame can be paused remotely
+- [x] Surface the same pause toggle on the web UI so the frame can be paused remotely
 
 ## Reliability
 
@@ -57,9 +56,9 @@
 ## Nice to have (higher effort)
 
 - [ ] Shuffle / random playback mode
-- [ ] Image thumbnails in the web file-management UI
+- [x] Image thumbnails in the web file-management UI
 - [ ] Ship a self-contained `convert.html` on the SD card root: drag-and-drop image, downscale + re-encode to 320x240 `.jpg` in the browser, save back to SD. Handy when copying photos directly to the card without the device's web UI.
-- [ ] Show the device's current wall-clock time on `/status` (and ideally on `/display`) so the user can confirm NTP is working and that night-mode hours line up with reality. Add a timezone offset / POSIX `TZ` field to `/display` and persist it in NVS, then feed it to `setenv("TZ", ...)` + `tzset()` so the on-device clock and the night-mode schedule both follow local time instead of raw UTC.
+- [x] Show the device's current wall-clock time on `/status` (and ideally on `/display`) so the user can confirm NTP is working and that night-mode hours line up with reality. Add a timezone offset / POSIX `TZ` field to `/display` and persist it in NVS, then feed it to `setenv("TZ", ...)` + `tzset()` so the on-device clock and the night-mode schedule both follow local time instead of raw UTC.
 
 -----
 
