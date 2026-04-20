@@ -6,96 +6,294 @@
   <style>
     body { font-family: Arial, sans-serif; background: #f0f0f0; text-align: center; margin: 0; padding: 0; }
     h1 { background: #333; color: #fff; padding: 20px; margin: 0; }
-    .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+    .container { padding: 20px; max-width: 600px; margin: 0 auto; }
     .drop-zone {
       border: 3px dashed #aaa; border-radius: 12px; padding: 40px 20px;
       cursor: pointer; color: #555; font-size: 16px; margin: 16px 0;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.2s, background 0.2s; background: #fff;
     }
     .drop-zone.over { border-color: #4CAF50; background: #e8f5e9; }
-    canvas { border: 1px solid #ccc; border-radius: 4px; max-width: 100%; display: none; margin: 12px auto; }
-    .hint { color: #555; font-size: 13px; margin: 8px 0; }
+    
+    #editor-section { display: none; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-top: 20px;}
+    
+    .canvas-container { position: relative; display: inline-block; margin: 12px auto; }
+    canvas { 
+      border: 1px solid #333; border-radius: 4px; display: block;
+      cursor: grab; touch-action: none;
+    }
+    canvas:active { cursor: grabbing; }
+    
+    .hint { color: #666; font-size: 13px; margin: 8px 0; }
+    .queue-info { font-weight: bold; color: #333; font-size: 18px; margin-bottom: 10px; }
+    
+    .toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 15px 0; align-items: center; }
+    .tool-btn { padding: 8px 12px; border: 1px solid #ccc; background: #f9f9f9; border-radius: 6px; cursor: pointer; font-size: 14px;}
+    .tool-btn:hover { background: #e0e0e0; }
+    .slider-container { display: flex; align-items: center; gap: 8px; font-size: 14px;}
+    
     .button {
-      display: inline-block; padding: 15px 25px; font-size: 16px; margin: 8px;
+      display: inline-block; padding: 12px 20px; font-size: 16px; margin: 6px;
       cursor: pointer; color: #fff; background: #4CAF50; border: none;
-      border-radius: 15px; box-shadow: 0 5px #999; text-decoration: none;
+      border-radius: 8px; box-shadow: 0 4px #999; text-decoration: none; transition: 0.1s;
     }
     .button:hover { background: #3e8e41; }
-    .button:active { background: #3e8e41; box-shadow: 0 3px #666; transform: translateY(2px); }
+    .button:active { background: #3e8e41; box-shadow: 0 2px #666; transform: translateY(2px); }
     .button:disabled { background: #aaa; box-shadow: none; cursor: default; transform: none; }
-    .button.secondary { background: #777; }
-    #info { min-height: 1.4em; }
+    .button.secondary { background: #777; box-shadow: 0 4px #555; }
+    .button.secondary:active { box-shadow: 0 2px #333; }
+    .button.danger { background: #e53935; box-shadow: 0 4px #b71c1c; }
+    .button.danger:active { box-shadow: 0 2px #b71c1c; }
   </style>
 </head>
 <body>
   <h1>PhotoFrame Image Converter</h1>
   <div class="container">
-    <p>Resize any image to 320&times;240 JPEG for the PhotoFrame SD card.</p>
+    <p>Resize, reframe, and bulk convert images to 320&times;240 JPEG.</p>
 
     <div class="drop-zone" id="drop-zone">
-      Drop an image here, or click to pick a file
-      <input type="file" id="file" accept="image/*" style="display:none">
+      Drop image(s) here, or click to pick files
+      <input type="file" id="file" accept="image/*" multiple style="display:none">
     </div>
 
-    <canvas id="preview" width="320" height="240"></canvas>
-    <p class="hint" id="info"></p>
+    <div id="editor-section">
+      <div class="queue-info" id="queue-info">Image 1 of 1</div>
+      
+      <div class="canvas-container">
+        <canvas id="preview" width="320" height="240"></canvas>
+      </div>
+      <p class="hint">Drag photo to pan. Use mouse wheel or slider to zoom.</p>
 
-    <button class="button" id="dl-btn" disabled>Download 320&times;240 JPEG</button>
-    <a href="/" class="button secondary" id="back-link">Back to PhotoFrame</a>
+      <div class="toolbar">
+        <button class="tool-btn" id="btn-rotate" title="Rotate 90 degrees">⟳ Rotate</button>
+        <button class="tool-btn" id="btn-fit">Fit</button>
+        <button class="tool-btn" id="btn-fill">Fill</button>
+        <div class="slider-container">
+          <label for="zoom-slider">Zoom:</label>
+          <input type="range" id="zoom-slider" min="0.1" max="5" step="0.01">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="button" id="btn-save">Save & Next</button>
+        <button class="button secondary" id="btn-skip">Skip</button>
+        <button class="button danger" id="btn-auto">Auto-Process Remaining</button>
+      </div>
+    </div>
+    
+    <div style="margin-top: 20px;">
+      <a href="/" class="button secondary" id="back-link">Back to PhotoFrame</a>
+    </div>
   </div>
 
   <script>
-    var dropZone = document.getElementById('drop-zone');
-    var fileInput = document.getElementById('file');
-    var canvas    = document.getElementById('preview');
-    var ctx       = canvas.getContext('2d');
-    var info      = document.getElementById('info');
-    var dlBtn     = document.getElementById('dl-btn');
-    var lastName  = 'photoframe.jpg';
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file');
+    const editor = document.getElementById('editor-section');
+    const queueInfo = document.getElementById('queue-info');
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d');
+    const zoomSlider = document.getElementById('zoom-slider');
+    
+    let filesQueue = [];
+    let currentIndex = 0;
+    let currentImg = new Image();
+    let currentObjectUrl = null;
+    let isAutoProcessing = false;
 
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('over'); });
-    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('over'); });
-    dropZone.addEventListener('drop', function(e) {
+    // Transformation state
+    let panX = 0, panY = 0, scale = 1, rotation = 0;
+    let isDragging = false, startX, startY;
+
+    // --- File Input Handling ---
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over')); // Fixed stray '}' here
+    dropZone.addEventListener('drop', (e) => {
       e.preventDefault(); dropZone.classList.remove('over');
-      if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+      handleFiles(e.dataTransfer.files);
     });
-    fileInput.addEventListener('change', function() {
-      if (this.files[0]) processFile(this.files[0]);
-    });
+    fileInput.addEventListener('change', function() { handleFiles(this.files); });
 
-    function processFile(file) {
-      lastName = file.name.replace(/\.[^.]+$/, '.jpg');
-      info.textContent = 'Loading...';
-      dlBtn.disabled = true;
-      canvas.style.display = 'none';
-      var img = new Image();
-      img.onload = function() {
-        var scale = Math.min(320 / img.width, 240 / img.height);
-        var w = Math.round(img.width  * scale);
-        var h = Math.round(img.height * scale);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, 320, 240);
-        ctx.drawImage(img, Math.round((320 - w) / 2), Math.round((240 - h) / 2), w, h);
-        URL.revokeObjectURL(img.src);
-        canvas.style.display = 'block';
-        info.textContent = 'Original: ' + img.width + '\xd7' + img.height +
-                           ' \u2192 letterboxed to 320\xd7240. Ready to download.';
-        dlBtn.disabled = false;
-      };
-      img.onerror = function() { info.textContent = 'Could not load image — try a different file.'; };
-      img.src = URL.createObjectURL(file);
+    function handleFiles(files) {
+      const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      if (validFiles.length === 0) return;
+      
+      filesQueue = validFiles;
+      currentIndex = 0;
+      isAutoProcessing = false;
+      editor.style.display = 'block';
+      loadCurrentImage();
     }
 
-    dlBtn.addEventListener('click', function() {
-      canvas.toBlob(function(blob) {
-        var a = document.createElement('a');
+    function loadCurrentImage() {
+      if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+      
+      if (currentIndex >= filesQueue.length) {
+        editor.style.display = 'none';
+        alert('All queued images have been processed!');
+        fileInput.value = "";
+        return;
+      }
+
+      const file = filesQueue[currentIndex];
+      queueInfo.textContent = `Editing: ${currentIndex + 1} of ${filesQueue.length} (${file.name})`;
+      
+      currentObjectUrl = URL.createObjectURL(file);
+      currentImg.onload = () => {
+        rotation = 0;
+        applyPreset('fill'); // Default to fill for photo frames
+      };
+      currentImg.src = currentObjectUrl;
+    }
+
+    // --- Math & Drawing ---
+    function getScales() {
+      // Swap width/height logic for 90/270 degree rotations
+      let w = (rotation % 180 !== 0) ? currentImg.height : currentImg.width;
+      let h = (rotation % 180 !== 0) ? currentImg.width  : currentImg.height;
+      return {
+        fit: Math.min(320 / w, 240 / h),
+        fill: Math.max(320 / w, 240 / h)
+      };
+    }
+
+    function applyPreset(type) {
+      const scales = getScales();
+      scale = scales[type];
+      panX = 0; panY = 0;
+      updateSliderRange(scales);
+      draw();
+    }
+
+    function updateSliderRange(scales) {
+      zoomSlider.min = scales.fit * 0.5;
+      zoomSlider.max = scales.fill * 3;
+      zoomSlider.value = scale;
+    }
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 320, 240);
+      
+      if (!currentImg.width) return;
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Move to center, apply pan, rotate, scale, then draw centered
+      ctx.translate(160 + panX, 120 + panY);
+      ctx.rotate(rotation * Math.PI / 180);
+      ctx.scale(scale, scale);
+      ctx.drawImage(currentImg, -currentImg.width / 2, -currentImg.height / 2);
+      
+      ctx.restore();
+    }
+
+    // --- Toolbar Actions ---
+    document.getElementById('btn-fit').onclick = () => applyPreset('fit');
+    document.getElementById('btn-fill').onclick = () => applyPreset('fill');
+    document.getElementById('btn-rotate').onclick = () => {
+      rotation = (rotation + 90) % 360;
+      applyPreset('fill');
+    };
+    
+    zoomSlider.addEventListener('input', (e) => {
+      scale = parseFloat(e.target.value);
+      draw();
+    });
+
+    // --- Mouse & Touch Panning / Zooming ---
+    function getPos(e) {
+      if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    function startDrag(e) {
+      isDragging = true;
+      let pos = getPos(e);
+      startX = pos.x - panX;
+      startY = pos.y - panY;
+    }
+
+    function doDrag(e) {
+      if (!isDragging) return;
+      e.preventDefault(); // Prevent scrolling while panning
+      let pos = getPos(e);
+      panX = pos.x - startX;
+      panY = pos.y - startY;
+      draw();
+    }
+
+    function stopDrag() { isDragging = false; }
+
+    canvas.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', doDrag);
+    window.addEventListener('mouseup', stopDrag);
+
+    canvas.addEventListener('touchstart', startDrag, {passive: false});
+    window.addEventListener('touchmove', doDrag, {passive: false});
+    window.addEventListener('touchend', stopDrag);
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
+      scale *= zoomAmount;
+      zoomSlider.value = scale;
+      draw();
+    }, {passive: false});
+
+    // --- Downloading & Queue Processing ---
+    function triggerDownload(callback) {
+      canvas.toBlob((blob) => {
+        const file = filesQueue[currentIndex];
+        const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = lastName;
+        a.download = file.name.replace(/\.[^.]+$/, '.jpg');
         a.click();
         URL.revokeObjectURL(a.href);
+        if(callback) callback();
       }, 'image/jpeg', 0.85);
-    });
+    }
+
+    document.getElementById('btn-save').onclick = () => {
+      triggerDownload(() => {
+        currentIndex++;
+        loadCurrentImage();
+      });
+    };
+
+    document.getElementById('btn-skip').onclick = () => {
+      currentIndex++;
+      loadCurrentImage();
+    };
+
+    // Auto process loops automatically with a slight delay
+    document.getElementById('btn-auto').onclick = () => {
+      if(filesQueue.length - currentIndex > 1) {
+        if(!confirm("This will auto-fill and download the remaining " + (filesQueue.length - currentIndex) + " images. (Your browser may ask for permission to download multiple files). Continue?")) return;
+      }
+      isAutoProcessing = true;
+      processNextAuto();
+    };
+
+    function processNextAuto() {
+      if (!isAutoProcessing || currentIndex >= filesQueue.length) {
+        isAutoProcessing = false;
+        if(currentIndex >= filesQueue.length) loadCurrentImage(); // trigger completion state
+        return;
+      }
+      
+      // Reset to default fill for automated processing
+      rotation = 0; 
+      applyPreset('fill');
+      
+      triggerDownload(() => {
+        currentIndex++;
+        // 300ms timeout prevents browsers from forcefully blocking bulk script downloads
+        setTimeout(processNextAuto, 300);
+      });
+    }
 
     // Hide the "Back" link when opened as a local file (no server)
     if (location.protocol === 'file:') {
